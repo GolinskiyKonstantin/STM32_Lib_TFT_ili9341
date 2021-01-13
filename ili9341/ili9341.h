@@ -40,12 +40,13 @@ extern uint16_t ILI9341_Width, ILI9341_Height;
 			// на данный момент есть реализация на серию F1 F4 H7 для выбора серии в функциях
 			//	void ILI9341_SendCmd(uint8_t Cmd);
 			//	void ILI9341_SendData(uint8_t Data );
+			//  void ILI9341_FillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
 			// комментируем и раскомментируем то что нам нужно, также там же редактируем под свой МК если не работает
-			#define 	ILI9341_SPI_CMSIS 		SPI2
+			#define 	ILI9341_SPI_CMSIS 		SPI1
 			//-----------------------------------------------
 			
 			// указываем порт SPI для HAL ( медлено )--------
-			//#define 	ILI9341_SPI_HAL 		hspi2
+			//#define 	ILI9341_SPI_HAL 		hspi1
 			//-----------------------------------------------
 
 		//============================================================================
@@ -169,14 +170,14 @@ void ILI9341_DrawPixel(uint16_t x, uint16_t y, uint16_t color);
 //==============================================================================
 // Процедура рисования символа ( 1 буква или знак )
 //==============================================================================
-char ILI9341_DrawChar(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, unsigned char ch);
+void ILI9341_DrawChar(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, unsigned char ch);
 //==============================================================================
 
 
 //==============================================================================
 // Процедура рисования строки
 //==============================================================================
-char ILI9341_print(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, char *str);
+void ILI9341_print(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, char *str);
 //==============================================================================
 
 

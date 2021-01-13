@@ -26,8 +26,17 @@ uint16_t ILI9341_Width, ILI9341_Height;
 void ILI9341_Select(void) {
 	
     #ifdef CS_PORT
-			HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
-			// CS_GPIO_Port->BSRR = ( CS_Pin << 16 );
+			//-- если захотим переделать под HAL ------------------	
+			#ifdef ILI9341_SPI_HAL
+				HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
+			#endif
+			//-----------------------------------------------------
+			
+			//-- если захотим переделать под CMSIS  ---------------
+			#ifdef ILI9341_SPI_CMSIS
+				CS_GPIO_Port->BSRR = ( CS_Pin << 16 );
+			#endif
+			//-----------------------------------------------------
 	#endif
 	
 }
@@ -40,8 +49,17 @@ void ILI9341_Select(void) {
 void ILI9341_Unselect(void) {
 	
     #ifdef CS_PORT
-			HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
-			// CS_GPIO_Port->BSRR = CS_Pin;
+			//-- если захотим переделать под HAL ------------------	
+			#ifdef ILI9341_SPI_HAL
+				HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
+			#endif
+			//-----------------------------------------------------
+			
+			//-- если захотим переделать под CMSIS  ---------------
+			#ifdef ILI9341_SPI_CMSIS
+					 CS_GPIO_Port->BSRR = CS_Pin;
+			#endif
+			//-----------------------------------------------------
 	#endif
 	
 }
@@ -65,36 +83,49 @@ static void ILI9341_Reset(void) {
 //==============================================================================
 static void ILI9341_SendCmd(uint8_t cmd) {
 	
-	// pin DC LOW
-	HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_RESET);
-	//DC_GPIO_Port->BSRR = ( DC_Pin << 16 );
-	
 	//-- если захотим переделать под HAL ------------------
 	#ifdef ILI9341_SPI_HAL
-	
+		
+		// pin DC LOW
+		 HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_RESET);
+		 
 		HAL_SPI_Transmit(&ILI9341_SPI_HAL, &cmd, sizeof(cmd), HAL_MAX_DELAY);
 		while(HAL_SPI_GetState(&ILI9341_SPI_HAL) != HAL_SPI_STATE_READY){};
+		
+		// pin DC HIGH
+		 HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_SET);
 		
 	#endif
 	//-----------------------------------------------------
 			
 	//-- если захотим переделать под CMSIS  ---------------------------------------------
 	#ifdef ILI9341_SPI_CMSIS
-	
+		
+		// pin DC LOW
+		DC_GPIO_Port->BSRR = ( DC_Pin << 16 );
+		
 		//======  FOR F-SERIES ===========================================================
 			
 			// Disable SPI	
 			//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 &= ~SPI_CR1_SPE;
 			// Enable SPI
-			SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
+			if((ILI9341_SPI_CMSIS->CR1 & SPI_CR1_SPE) != SPI_CR1_SPE){
+				// If disabled, I enable it
+				SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
+			}
 			
 			// Ждем, пока не освободится буфер передатчика
-			// while((ILI9341_SPI_CMSIS->SR&SPI_SR_BSY)){};
+			// TXE(Transmit buffer empty) – устанавливается когда буфер передачи(регистр SPI_DR) пуст, очищается при загрузке данных
+			while( (ILI9341_SPI_CMSIS->SR & SPI_SR_TXE) == RESET ){};
 		
 			// передаем 1 байт информации--------------
 			*((__IO uint8_t *)&ILI9341_SPI_CMSIS->DR) = cmd;
-			// ждем когда буфер освободиться ( тем самым знаем что байт отправили )
-			while(!(ILI9341_SPI_CMSIS->SR & SPI_SR_TXE)){};
+			
+			// TXE(Transmit buffer empty) – устанавливается когда буфер передачи(регистр SPI_DR) пуст, очищается при загрузке данных
+			while( (ILI9341_SPI_CMSIS->SR & (SPI_SR_TXE | SPI_SR_BSY)) != SPI_SR_TXE ){};
+			
+			//Ждем, пока SPI освободится от предыдущей передачи
+			//while((ILI9341_SPI_CMSIS->SR&SPI_SR_BSY)){};
 			
 			// Disable SPI	
 			//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);
@@ -106,8 +137,11 @@ static void ILI9341_SendCmd(uint8_t cmd) {
 			// Disable SPI	
 			//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 &= ~SPI_CR1_SPE;
 			// Enable SPI
-			SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
-
+			if((ILI9341_SPI_CMSIS->CR1 & SPI_CR1_SPE) != SPI_CR1_SPE){
+				// If disabled, I enable it
+				SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
+			}
+			
 			SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_CSTART);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_CSTART;
 			
 			// ждем пока SPI будет свободна------------
@@ -123,13 +157,12 @@ static void ILI9341_SendCmd(uint8_t cmd) {
 			//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);
 			
 */		//================================================================================
-			
+		
+		// pin DC HIGH
+		DC_GPIO_Port->BSRR = DC_Pin;
+		
 	#endif
 	//-----------------------------------------------------------------------------------
-	
-	// pin DC HIGH
-	HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_SET);
-	//DC_GPIO_Port->BSRR = DC_Pin;
 	
 }
 //==============================================================================
@@ -143,14 +176,20 @@ static void ILI9341_SendData(uint8_t* buff, size_t buff_size) {
 	//-- если захотим переделать под HAL ------------------
 	#ifdef ILI9341_SPI_HAL
 
-    // split data in small chunks because HAL can't send more then 64K at once
-    while(buff_size > 0) {
-        uint16_t chunk_size = buff_size > 32768 ? 32768 : buff_size;
-        HAL_SPI_Transmit(&ILI9341_SPI_HAL, buff, chunk_size, HAL_MAX_DELAY);
-        while(HAL_SPI_GetState(&ILI9341_SPI_HAL) != HAL_SPI_STATE_READY){};
-		buff += chunk_size;
-        buff_size -= chunk_size;
-    }	
+		if( buff_size <= 0xFFFF ){
+			HAL_SPI_Transmit(&ILI9341_SPI_HAL, buff, buff_size, HAL_MAX_DELAY);
+		}
+		else{
+			while( buff_size > 0xFFFF ){
+				HAL_SPI_Transmit(&ILI9341_SPI_HAL, buff, 0xFFFF, HAL_MAX_DELAY);
+				buff_size-=0xFFFF;
+				buff+=0xFFFF;
+			}
+			HAL_SPI_Transmit(&ILI9341_SPI_HAL, buff, buff_size, HAL_MAX_DELAY);
+		}
+		
+		while(HAL_SPI_GetState(&ILI9341_SPI_HAL) != HAL_SPI_STATE_READY){};
+		
 	#endif
 	//-----------------------------------------------------
 	
@@ -162,21 +201,28 @@ static void ILI9341_SendData(uint8_t* buff, size_t buff_size) {
 			// Disable SPI	
 			//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 &= ~SPI_CR1_SPE;
 			// Enable SPI
-			SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
+			if((ILI9341_SPI_CMSIS->CR1 & SPI_CR1_SPE) != SPI_CR1_SPE){
+				// If disabled, I enable it
+				SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
+			}
+	
+			while( buff_size ){
+				
+				// Ждем, пока не освободится буфер передатчика
+				// TXE(Transmit buffer empty) – устанавливается когда буфер передачи(регистр SPI_DR) пуст, очищается при загрузке данных
+				while( (ILI9341_SPI_CMSIS->SR & SPI_SR_TXE) == RESET ){};
+				
+				// передаем 1 байт информации--------------
+				*((__IO uint8_t *)&ILI9341_SPI_CMSIS->DR) = *buff++;
+
+				buff_size--;
+			}
+			
+			// TXE(Transmit buffer empty) – устанавливается когда буфер передачи(регистр SPI_DR) пуст, очищается при загрузке данных
+			while( (ILI9341_SPI_CMSIS->SR & (SPI_SR_TXE | SPI_SR_BSY)) != SPI_SR_TXE ){};
 			
 			// Ждем, пока не освободится буфер передатчика
 			// while((ILI9341_SPI_CMSIS->SR&SPI_SR_BSY)){};
-			
-			while( buff_size ){
-		
-				// передаем 1 байт информации--------------
-				*((__IO uint8_t *)&ILI9341_SPI_CMSIS->DR) = *buff++;
-				// ждем когда буфер освободиться ( тем самым знаем что байт отправили )
-				while(!(ILI9341_SPI_CMSIS->SR & SPI_SR_TXE)){};
-
-				buff_size--;
-
-			}
 			
 			// Disable SPI	
 			//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);
@@ -188,8 +234,11 @@ static void ILI9341_SendData(uint8_t* buff, size_t buff_size) {
 			// Disable SPI	
 			//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 &= ~SPI_CR1_SPE;
 			// Enable SPI
-			SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
-
+			if((ILI9341_SPI_CMSIS->CR1 & SPI_CR1_SPE) != SPI_CR1_SPE){
+				// If disabled, I enable it
+				SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
+			}
+			
 			SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_CSTART);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_CSTART;
 			
 			// ждем пока SPI будет свободна------------
@@ -437,7 +486,7 @@ void ILI9341_DrawPixel(uint16_t x, uint16_t y, uint16_t color) {
 //==============================================================================
 // Процедура рисования символа ( 1 буква или знак )
 //==============================================================================
-char ILI9341_DrawChar(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, unsigned char ch) {
+void ILI9341_DrawChar(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, unsigned char ch) {
 	
 	uint32_t i, b, j;
 	
@@ -454,65 +503,61 @@ char ILI9341_DrawChar(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgCol
 	
 	
 	/* Check available space in LCD */
-	if (
-		ILI9341_Width <= ( x + Font->FontWidth) || ILI9341_Height <= ( y + Font->FontHeight)){
-		/* Error */
-		return 0;
-	}
+	if (ILI9341_Width >= ( x + Font->FontWidth) || ILI9341_Height >= ( y + Font->FontHeight)){
 	
-	/* Go through font */
-	for (i = 0; i < Font->FontHeight; i++) {		
-		
-		if( ch < 127 ){			
-			b = Font->data[(ch - 32) * Font->FontHeight + i];
-		}
-		
-		else if( (uint8_t) ch > 191 ){
-			// +96 это так как латинские символы и знаки в шрифтах занимают 96 позиций
-			// и если в шрифте который содержит сперва латиницу и спец символы и потом 
-			// только кирилицу то нужно добавлять 95 если шрифт 
-			// содержит только кирилицу то +96 не нужно
-			b = Font->data[((ch - 192) + 96) * Font->FontHeight + i];
-		}
-		
-		else if( (uint8_t) ch == 168 ){	// 168 символ по ASCII - Ё
-			// 160 эллемент ( символ Ё ) 
-			b = Font->data[( 160 ) * Font->FontHeight + i];
-		}
-		
-		else if( (uint8_t) ch == 184 ){	// 184 символ по ASCII - ё
-			// 161 эллемент  ( символ ё ) 
-			b = Font->data[( 161 ) * Font->FontHeight + i];
-		}
-		//-------------------------------------------------------------------
-		
-		for (j = 0; j < Font->FontWidth; j++) {
+		/* Go through font */
+		for (i = 0; i < Font->FontHeight; i++) {		
 			
-			if ((b << j) & 0x8000) {
-				
-				for (yy = 0; yy < multiplier; yy++){
-					for (xx = 0; xx < multiplier; xx++){
-							ILI9341_DrawPixel(X+xx, Y+yy, TextColor);
-					}
-				}
-				
-			} 
-			else if( TransparentBg ){
-				
-				for (yy = 0; yy < multiplier; yy++){
-					for (xx = 0; xx < multiplier; xx++){
-							ILI9341_DrawPixel(X+xx, Y+yy, BgColor);
-					}
-				}
-				
+			if( ch < 127 ){			
+				b = Font->data[(ch - 32) * Font->FontHeight + i];
 			}
-			X = X + multiplier;
+			
+			else if( (uint8_t) ch > 191 ){
+				// +96 это так как латинские символы и знаки в шрифтах занимают 96 позиций
+				// и если в шрифте который содержит сперва латиницу и спец символы и потом 
+				// только кирилицу то нужно добавлять 95 если шрифт 
+				// содержит только кирилицу то +96 не нужно
+				b = Font->data[((ch - 192) + 96) * Font->FontHeight + i];
+			}
+			
+			else if( (uint8_t) ch == 168 ){	// 168 символ по ASCII - Ё
+				// 160 эллемент ( символ Ё ) 
+				b = Font->data[( 160 ) * Font->FontHeight + i];
+			}
+			
+			else if( (uint8_t) ch == 184 ){	// 184 символ по ASCII - ё
+				// 161 эллемент  ( символ ё ) 
+				b = Font->data[( 161 ) * Font->FontHeight + i];
+			}
+			//-------------------------------------------------------------------
+			
+			for (j = 0; j < Font->FontWidth; j++) {
+				
+				if ((b << j) & 0x8000) {
+					
+					for (yy = 0; yy < multiplier; yy++){
+						for (xx = 0; xx < multiplier; xx++){
+								ILI9341_DrawPixel(X+xx, Y+yy, TextColor);
+						}
+					}
+					
+				} 
+				else if( TransparentBg ){
+					
+					for (yy = 0; yy < multiplier; yy++){
+						for (xx = 0; xx < multiplier; xx++){
+								ILI9341_DrawPixel(X+xx, Y+yy, BgColor);
+						}
+					}
+					
+				}
+				X = X + multiplier;
+			}
+			X = x;
+			Y = Y + multiplier;
 		}
-		X = x;
-		Y = Y + multiplier;
-	}
 	
-	return ch;
+	}
 }
 //==============================================================================
 
@@ -520,25 +565,58 @@ char ILI9341_DrawChar(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgCol
 //==============================================================================
 // Процедура рисования строки
 //==============================================================================
-char ILI9341_print(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, char *str){	
+void ILI9341_print(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, char *str){	
 	
 	if( multiplier < 1 ){
 		multiplier = 1;
 	}
 	
-	while (*str) {
-		/* Write character by character */
-		if ( ILI9341_DrawChar(x, y, TextColor, BgColor, TransparentBg, Font, multiplier, *str) != *str ){
-			/* Return error */
-			return *str;
-		}
+	unsigned char buff_char;
+	
+	uint16_t len = strlen(str);
+	
+	while (len--) {
 		
+		//---------------------------------------------------------------------
+		// проверка на кириллицу UTF-8, если латиница то пропускаем if
+		// Расширенные символы ASCII Win-1251 кириллица (код символа 128-255)
+		// проверяем первый байт из двух ( так как UTF-8 ето два байта )
+		// если он больше либо равен 0xC0 ( первый байт в кириллеце будет равен 0xD0 либо 0xD1 именно в алфавите )
+		if ( (uint8_t)*str >= 0xC0 ){	// код 0xC0 соответствует символу кириллица 'A' по ASCII Win-1251
+			
+			// проверяем какой именно байт первый 0xD0 либо 0xD1
+			switch ((uint8_t)*str) {
+				case 0xD0: {
+					// увеличиваем массив так как нам нужен второй байт
+					str++;
+					// проверяем второй байт там сам символ
+					if ((uint8_t)*str == 0x81) { buff_char = 0xA8; break; }		// байт символа Ё ( если нужнф еще символы добавляем тут и в функции DrawChar() )
+					if ((uint8_t)*str >= 0x90 && (uint8_t)*str <= 0xBF){ buff_char = (*str) + 0x30; }	// байт символов А...Я а...п  делаем здвиг на +48
+					break;
+				}
+				case 0xD1: {
+					// увеличиваем массив так как нам нужен второй байт
+					str++;
+					// проверяем второй байт там сам символ
+					if ((uint8_t)*str == 0x91) { buff_char = 0xB8; break; }		// байт символа ё ( если нужнф еще символы добавляем тут и в функции DrawChar() )
+					if ((uint8_t)*str >= 0x80 && (uint8_t)*str <= 0x8F){ buff_char = (*str) + 0x70; }	// байт символов п...я	елаем здвиг на +112
+					break;
+				}
+			}
+			// уменьшаем еще переменную так как израсходывали 2 байта для кириллицы
+			len--;
+			
+			ILI9341_DrawChar(x, y, TextColor, BgColor, TransparentBg, Font, multiplier, buff_char);
+		}
+		//---------------------------------------------------------------------
+		else{
+			ILI9341_DrawChar(x, y, TextColor, BgColor, TransparentBg, Font, multiplier, *str);
+		}
+			
 		x = x + (Font->FontWidth * multiplier);
 		/* Increase string pointer */
 		str++;
 	}
-	/* Everything OK, zero should be returned */
-	return *str;
 }
 //==============================================================================
 
@@ -567,44 +645,136 @@ void ILI9341_FillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint1
     uint8_t data[2];
 	data[0] = color >> 8;
 	data[1] = color & 0xFF ;
-	
-    HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_SET);
+		
+	//-- если захотим переделать под HAL ------------------
+	#ifdef ILI9341_SPI_HAL
+			
+		// pin DC HIGH
+		HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_SET);
+				
+	#endif
+	//-----------------------------------------------------
+
+	//-- если захотим переделать под CMSIS  ---------------------------------------------
+	#ifdef ILI9341_SPI_CMSIS
+				
+		// pin DC HIGH
+		DC_GPIO_Port->BSRR = DC_Pin;
+		
+	#endif
+	//-----------------------------------------------------
 	
     for(y = h; y > 0; y--) {
         for(x = w; x > 0; x--) {
-				//Ждем, пока не освободится буфер передатчика
-				//while(!(ILI9341_SPI->SR & SPI_SR_TXE)){};
 			
-				//-- если захотим переделать под HAL ------------------
-				#ifdef ILI9341_SPI_HAL
-					HAL_SPI_Transmit(&ILI9341_SPI_HAL, data, sizeof(data), HAL_MAX_DELAY);
-					while(HAL_SPI_GetState(&ILI9341_SPI_HAL) != HAL_SPI_STATE_READY){};
-				#endif
-				//-----------------------------------------------------
+			//-- если захотим переделать под HAL ------------------
+			#ifdef ILI9341_SPI_HAL
+				 
+				HAL_SPI_Transmit(&ILI9341_SPI_HAL, data, sizeof(data), HAL_MAX_DELAY);
+				while(HAL_SPI_GetState(&ILI9341_SPI_HAL) != HAL_SPI_STATE_READY){};
 				
+			#endif
+			//-----------------------------------------------------
+					
+			//-- если захотим переделать под CMSIS  ---------------------------------------------
+			#ifdef ILI9341_SPI_CMSIS
 				
-				//-- если захотим переделать под CMSIS  ---------------------------------------------
-				#ifdef ILI9341_SPI_CMSIS	
-					if (READ_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE) != (SPI_CR1_SPE)){
-						
-						SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);
+				//======  FOR F-SERIES ===========================================================
+					
+					// Disable SPI	
+					//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 &= ~SPI_CR1_SPE;
+					// Enable SPI
+					if((ILI9341_SPI_CMSIS->CR1 & SPI_CR1_SPE) != SPI_CR1_SPE){
+						// If disabled, I enable it
+						SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
 					}
 					
-					*((__IO uint8_t *)&ILI9341_SPI_CMSIS->DR ) = *data;	
-					while((ILI9341_SPI_CMSIS->SR&SPI_SR_BSY)){};
+					// Ждем, пока не освободится буфер передатчика
+					// TXE(Transmit buffer empty) – устанавливается когда буфер передачи(регистр SPI_DR) пуст, очищается при загрузке данных
+					while( (ILI9341_SPI_CMSIS->SR & SPI_SR_TXE) == RESET ){};
+				
+					// передаем 1 байт информации--------------
+					*((__IO uint8_t *)&ILI9341_SPI_CMSIS->DR) = data[0];
 					
-					if (READ_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE) != (SPI_CR1_SPE)){
+					// TXE(Transmit buffer empty) – устанавливается когда буфер передачи(регистр SPI_DR) пуст, очищается при загрузке данных
+					while( (ILI9341_SPI_CMSIS->SR & (SPI_SR_TXE | SPI_SR_BSY)) != SPI_SR_TXE ){};
+					
+					// Ждем, пока не освободится буфер передатчика
+					// TXE(Transmit buffer empty) – устанавливается когда буфер передачи(регистр SPI_DR) пуст, очищается при загрузке данных
+					while( (ILI9341_SPI_CMSIS->SR & SPI_SR_TXE) == RESET ){};
 						
-						SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);
-					}	
+					// передаем 1 байт информации--------------
+					*((__IO uint8_t *)&ILI9341_SPI_CMSIS->DR) = data[1];
 					
-					*((__IO uint8_t *)&ILI9341_SPI_CMSIS->DR ) = *data+1;	
-					while((ILI9341_SPI_CMSIS->SR&SPI_SR_BSY)){};
-				#endif
-				//-----------------------------------------------------------------------------------          
+					// TXE(Transmit buffer empty) – устанавливается когда буфер передачи(регистр SPI_DR) пуст, очищается при загрузке данных
+					while( (ILI9341_SPI_CMSIS->SR & (SPI_SR_TXE | SPI_SR_BSY)) != SPI_SR_TXE ){};
+						
+					//Ждем, пока SPI освободится от предыдущей передачи
+					//while((ILI9341_SPI_CMSIS->SR&SPI_SR_BSY)){};
+					
+					// Disable SPI	
+					//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);
+					
+				//================================================================================
+				
+		/*		//======  FOR H-SERIES ===========================================================
+
+					// Disable SPI	
+					//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 &= ~SPI_CR1_SPE;
+					// Enable SPI
+					if((ILI9341_SPI_CMSIS->CR1 & SPI_CR1_SPE) != SPI_CR1_SPE){
+						// If disabled, I enable it
+						SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_SPE;
+					}
+					
+					SET_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_CSTART);	// ILI9341_SPI_CMSIS->CR1 |= SPI_CR1_CSTART;
+					
+					// ждем пока SPI будет свободна------------
+					//while (!(ILI9341_SPI_CMSIS->SR & SPI_SR_TXP)){};		
+				
+					// передаем 1 байт информации--------------
+					*((__IO uint8_t *)&ILI9341_SPI_CMSIS->TXDR )  = data[0];
+						
+					// Ждать завершения передачи---------------
+					while (!( ILI9341_SPI_CMSIS -> SR & SPI_SR_TXC )){};
+					
+					// ждем пока SPI будет свободна------------
+					//while (!(ILI9341_SPI_CMSIS->SR & SPI_SR_TXP)){};
+					
+					// передаем 1 байт информации--------------
+					*((__IO uint8_t *)&ILI9341_SPI_CMSIS->TXDR )  = data[1];
+						
+					// Ждать завершения передачи---------------
+					while (!( ILI9341_SPI_CMSIS -> SR & SPI_SR_TXC )){};
+					
+					// Disable SPI	
+					//CLEAR_BIT(ILI9341_SPI_CMSIS->CR1, SPI_CR1_SPE);
+					
+		*/		//================================================================================
+								
+			#endif
+			//-----------------------------------------------------------------------------------        
         }
     }
-
+	
+	//-- если захотим переделать под HAL ------------------
+	#ifdef ILI9341_SPI_HAL
+				
+		// pin DC LOW
+		HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_RESET);
+				
+	#endif
+	//-----------------------------------------------------
+	
+	//-- если захотим переделать под CMSIS  ---------------------------------------------
+	#ifdef ILI9341_SPI_CMSIS
+				
+		// pin DC LOW
+		DC_GPIO_Port->BSRR = ( DC_Pin << 16 );
+		
+	#endif
+	//-----------------------------------------------------
+	
     ILI9341_Unselect();
 }
 //==============================================================================
