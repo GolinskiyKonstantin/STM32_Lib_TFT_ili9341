@@ -12,6 +12,13 @@
 #include "ili9341.h"
 
 
+static void ILI9341_Unselect(void);
+static void ILI9341_Select(void);
+static void ILI9341_SendCmd(uint8_t Cmd);
+static void ILI9341_SendData(uint8_t Data );
+static void SwapInt16Values(int16_t *pValue1, int16_t *pValue2);
+static void ILI9341_DrawLine_Slow(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t color);
+
 
 uint16_t ILI9341_Width, ILI9341_Height;
 
@@ -23,7 +30,7 @@ uint16_t ILI9341_Width, ILI9341_Height;
 //==============================================================================
 // Процедура управления SPI
 //==============================================================================
-void ILI9341_Select(void) {
+static void ILI9341_Select(void) {
 	
     #ifdef CS_PORT
 			//-- если захотим переделать под HAL ------------------	
@@ -46,7 +53,7 @@ void ILI9341_Select(void) {
 //==============================================================================
 // Процедура управления SPI
 //==============================================================================
-void ILI9341_Unselect(void) {
+static void ILI9341_Unselect(void) {
 	
     #ifdef CS_PORT
 			//-- если захотим переделать под HAL ------------------	
@@ -1442,6 +1449,77 @@ void ILI9341_DrawRoundRect(int16_t x, int16_t y, uint16_t width, uint16_t height
 }
 //==============================================================================
 
+//==============================================================================
+// Процедура рисования линия толстая ( последний параметр толщина )
+//==============================================================================
+void ILI9341_DrawLineThick(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t color, uint8_t thick) {
+	const int16_t deltaX = abs(x2 - x1);
+	const int16_t deltaY = abs(y2 - y1);
+	const int16_t signX = x1 < x2 ? 1 : -1;
+	const int16_t signY = y1 < y2 ? 1 : -1;
+
+	int16_t error = deltaX - deltaY;
+
+	if (thick > 1){
+		ILI9341_DrawCircleFilled(x2, y2, thick >> 1, color);
+	}
+	else{
+		ILI9341_DrawPixel(x2, y2, color);
+	}
+
+	while (x1 != x2 || y1 != y2) {
+		if (thick > 1){
+			ILI9341_DrawCircleFilled(x1, y1, thick >> 1, color);
+		}
+		else{
+			ILI9341_DrawPixel(x1, y1, color);
+		}
+
+		const int16_t error2 = error * 2;
+		if (error2 > -deltaY) {
+			error -= deltaY;
+			x1 += signX;
+		}
+		if (error2 < deltaX) {
+			error += deltaX;
+			y1 += signY;
+		}
+	}
+}
+//==============================================================================		
+
+//==============================================================================
+// Процедура рисования дуга толстая ( часть круга )
+//==============================================================================
+void ILI9341_DrawArc(int16_t x0, int16_t y0, int16_t radius, int16_t startAngle, int16_t endAngle, uint16_t color, uint8_t thick) {
+	
+	int16_t xLast = -1, yLast = -1;
+	startAngle -= 90;
+	endAngle -= 90;
+
+	for (int16_t angle = startAngle; angle <= endAngle; angle += 2) {
+		float angleRad = (float) angle * PI / 180;
+		int x = cos(angleRad) * radius + x0;
+		int y = sin(angleRad) * radius + y0;
+
+		if (xLast == -1 || yLast == -1) {
+			xLast = x;
+			yLast = y;
+			continue;
+		}
+
+		if (thick > 1){
+			ILI9341_DrawLineThick(xLast, yLast, x, y, color, thick);
+		}
+		else{
+			ILI9341_DrawLine(xLast, yLast, x, y, color);
+		}
+
+		xLast = x;
+		yLast = y;
+	}
+}
+//==============================================================================
 
 
 
