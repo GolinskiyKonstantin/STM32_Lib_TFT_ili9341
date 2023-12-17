@@ -50,7 +50,13 @@ extern C {
 			//-----------------------------------------------
 
 		//============================================================================
-		
+			
+			// выбираем как выводить информацию через буфер кадра или попиксельно ( 1-буфер кадра, 0-попиксельный вывод ) -----
+			// через буфер быстре если много информации обнавлять за один раз ( требует много оперативки для массива )
+			// по пиксельно рисует онлайн буз буферра если информация обновляеться немного то выгодно испотзовать данный режим
+			#define FRAME_BUFFER				0
+			//-----------------------------------------------------------------------------------------------------------------
+			
 		//=== указываем порты ( если в кубе назвали их DC RESET CS то тогда нечего указывать не нужно )
 		#if defined (DC_GPIO_Port)	// RES
 		#else
@@ -159,6 +165,23 @@ void ILI9341_DrawFillRoundRect(int16_t x, int16_t y, uint16_t width, uint16_t he
 void ILI9341_DrawRoundRect(int16_t x, int16_t y, uint16_t width, uint16_t height, int16_t cornerRadius, uint16_t color);
 void ILI9341_DrawArc(int16_t x0, int16_t y0, int16_t radius, int16_t startAngle, int16_t endAngle, uint16_t color, uint8_t thick);
 void ILI9341_DrawLineThick(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t color, uint8_t thick);
+void ILI9341_DrawLineWithAngle(int16_t x, int16_t y, uint16_t length, double angle_degrees, uint16_t color);
+void ILI9341_DrawEllipse(int16_t x0, int16_t y0, int16_t radiusX, int16_t radiusY, uint16_t color);
+void ILI9341_DrawEllipseWithAngle(int16_t x0, int16_t y0, int16_t radiusX, int16_t radiusY, float angle_degrees, uint16_t color);
+void ILI9341_DrawEllipseFilled(int16_t x0, int16_t y0, int16_t radiusX, int16_t radiusY, uint16_t color);
+void ILI9341_DrawEllipseFilledWithAngle(int16_t x0, int16_t y0, int16_t radiusX, int16_t radiusY, float angle_degrees, uint16_t color);
+void ILI9341_DrawCharWithAngle(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, double angle_degrees, unsigned char ch);
+void ILI9341_printWithAngle(uint16_t x, uint16_t y, uint16_t TextColor, uint16_t BgColor, uint8_t TransparentBg, FontDef_t* Font, uint8_t multiplier, double angle_degrees, char *str);
+void ILI9341_DrawBitmapWithAngle(int16_t x, int16_t y, const unsigned char* bitmap, int16_t w, int16_t h, uint16_t color, double angle_degrees);
+void ILI9341_DrawLineThickWithAngle(int16_t x, int16_t y, int16_t length, double angle_degrees, uint16_t color, uint8_t thick);
+
+
+
+
+#if FRAME_BUFFER
+	void ILI9341_Update(void);
+	void ILI9341_ClearFrameBuffer(void);
+#endif
 
 
 /* C++ detection */
