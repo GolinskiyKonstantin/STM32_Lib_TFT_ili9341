@@ -696,9 +696,11 @@ void ILI9341_FillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint1
 	}
 
 #if FRAME_BUFFER	// если включен буфер кадра
-	for( uint16_t i = 0; i < h; i++ ){
-		for( uint16_t j = 0; j < w; j++ ){
-			buff_frame[( y + i ) * ILI9341_Width + x + j] = ((color & 0xFF)<<8) | (color >> 8 );
+	if( x >=0 && y >=0 ){
+		for( uint16_t i = 0; i < h; i++ ){
+			for( uint16_t j = 0; j < w; j++ ){
+				buff_frame[( y + i ) * ILI9341_Width + x + j] = ((color & 0xFF)<<8) | (color >> 8 );
+			}
 		}
 	}
 #else	//если попиксельный вывод
